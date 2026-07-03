@@ -224,6 +224,15 @@ function applyOp(op, persist = true) {
   if (op.t === "merge") doMerge(op.into, op.from);
   else if (op.t === "move") doMove(op.photo, op.fi, op.to, op.nid);
   else if (op.t === "del") doDelete(op.id);
+  else if (op.t === "grp") {
+    op.ids.forEach(i => {
+      const p = DATA.people.find(x => x.id === i);
+      if (p) { if (op.g) p.group = op.g; else delete p.group; }
+    });
+  } else if (op.t === "renum") {
+    let n = 0;
+    DATA.people.forEach(p => { if (/^คนที่ \d+$/.test(p.name)) p.name = "คนที่ " + (++n); });
+  }
   else if (op.t === "name") {
     const p = DATA.people.find(x => x.id === op.id);
     if (p) p.name = op.nm;
@@ -297,12 +306,10 @@ const nextNewId = () => {
 /* ---------- render หลัก ---------- */
 function render() {
   // จำตำแหน่ง scroll ไว้ก่อน rebuild — ไม่ให้เด้งกลับต้นหน้าตอนกดลบ/รวม/ย้าย
-  const prevRail = document.querySelector(".rail");
-  const railX = prevRail ? prevRail.scrollLeft : 0;
+  const railXs = [...document.querySelectorAll(".rail")].map(r => r.scrollLeft);
   const winY = window.scrollY;
   renderInner();
-  const newRail = document.querySelector(".rail");
-  if (newRail) newRail.scrollLeft = railX;
+  document.querySelectorAll(".rail").forEach((r, i) => { if (railXs[i]) r.scrollLeft = railXs[i]; });
   window.scrollTo(0, winY);
 }
 
@@ -318,16 +325,28 @@ function renderInner() {
 
   if (ADMIN) {
     c.append(el("div", "admin-note",
-      `โหมดช่างภาพ — แก้ได้ 2 ระดับ: <b>รวมกลุ่ม</b> (เลือกหลายคนที่เป็นคนเดียวกันจากวงกลมมุมซ้าย แล้วกดรวมกลุ่ม) , <b>ย้ายรายหน้า</b> (เปิดรูป แตะหน้าที่ผิดคน แล้วเลือกคนที่ถูกหรือแยกเป็นคนใหม่) และ <b>ลบ ไม่ใช่คน</b> (เลือกกลุ่มที่เป็นพระพุทธรูป/ลายเสื้อ แล้วกดลบ) · แตะชื่อค้างเพื่อเปลี่ยนชื่อ · เสร็จแล้วกด "ส่งออก data.json" นำไปวางทับของเดิม`));
+      `โหมดช่างภาพ — แก้ได้ 2 ระดับ: <b>รวมกลุ่ม</b> (เลือกหลายคนที่เป็นคนเดียวกันจากวงกลมมุมซ้าย แล้วกดรวมกลุ่ม) , <b>ย้ายรายหน้า</b> (เปิดรูป แตะหน้าที่ผิดคน แล้วเลือกคนที่ถูกหรือแยกเป็นคนใหม่) และ <b>ลบ ไม่ใช่คน</b> (เลือกกลุ่มที่เป็นพระพุทธรูป/ลายเสื้อ แล้วกดลบ) · <b>จัดกลุ่ม</b> = ติดป้ายหมวด เช่น ครอบครัว/เพื่อน (แถบใบหน้าจะแยก section) · <b>เรียงเลขใหม่</b> = รีเซ็ตเลข "คนที่ n" ให้ต่อเนื่องหลังลบ/รวม · แตะชื่อค้างเพื่อเปลี่ยนชื่อ · เสร็จแล้วกด "ส่งออก data.json" นำไปวางทับของเดิม`));
   }
 
-  const rl = el("div", "rail-label");
-  rl.append(el("h2", null, "คนในงานนี้"), el("span", null, `${DATA.people.length} คน · เรียงตามจำนวนรูป`));
-  c.append(rl);
-
-  const rail = el("div", "rail");
-  DATA.people.forEach(p => rail.append(personChip(p, "rail")));
-  c.append(rail);
+  // แยกแถบใบหน้าตามกลุ่มที่ช่างภาพจัดไว้ (field group เป็น optional)
+  const byGroup = new Map();
+  DATA.people.forEach(p => {
+    const g = p.group || "";
+    if (!byGroup.has(g)) byGroup.set(g, []);
+    byGroup.get(g).push(p);
+  });
+  const addRail = (label, members) => {
+    const rl = el("div", "rail-label");
+    rl.append(el("h2", null, label), el("span", null, `${members.length} คน`));
+    c.append(rl);
+    const rail = el("div", "rail");
+    members.forEach(p => rail.append(personChip(p, "rail")));
+    c.append(rail);
+  };
+  const named = [...byGroup.keys()].filter(g => g);
+  named.forEach(g => addRail(g, byGroup.get(g)));
+  const rest = byGroup.get("") || [];
+  if (rest.length) addRail(named.length ? "คนอื่นๆ" : "คนในงานนี้", rest);
 
   const bar = el("div", "bar");
   if (activePerson) {
@@ -347,9 +366,15 @@ function renderInner() {
     del.id = "btn-del";
     del.disabled = selected.size < 1;
     del.onclick = deleteSelected;
+    const grp = el("button", "chip", `จัดกลุ่ม (${selected.size})`);
+    grp.id = "btn-grp";
+    grp.disabled = selected.size < 1;
+    grp.onclick = groupSelected;
+    const rn = el("button", "chip", "เรียงเลขใหม่");
+    rn.onclick = renumber;
     const ex = el("button", "chip", "ส่งออก data.json");
     ex.onclick = exportJSON;
-    bar.append(mg, del, ex);
+    bar.append(mg, del, grp, rn, ex);
   }
   c.append(bar);
 
@@ -417,9 +442,25 @@ function toggleSelect(id) {
 }
 
 function updateAdminBar() {
-  const mg = $("#btn-merge"), del = $("#btn-del");
+  const mg = $("#btn-merge"), del = $("#btn-del"), grp = $("#btn-grp");
   if (mg) { mg.textContent = `รวมกลุ่ม (${selected.size})`; mg.disabled = selected.size < 2; }
   if (del) { del.textContent = `ลบ ไม่ใช่คน (${selected.size})`; del.disabled = selected.size < 1; }
+  if (grp) { grp.textContent = `จัดกลุ่ม (${selected.size})`; grp.disabled = selected.size < 1; }
+}
+
+function groupSelected() {
+  const g = prompt('ตั้งชื่อกลุ่ม เช่น "ครอบครัว" / "เพื่อน" (เว้นว่าง = เอาออกจากกลุ่ม)', "");
+  if (g === null) return;
+  applyOp({ t: "grp", ids: [...selected], g: g.trim() });
+  selected.clear();
+  toast(g.trim() ? `จัดเข้ากลุ่ม "${g.trim()}" แล้ว` : "เอาออกจากกลุ่มแล้ว");
+  render();
+}
+
+function renumber() {
+  applyOp({ t: "renum" });
+  toast("เรียงเลข คนที่ n ใหม่แล้ว");
+  render();
 }
 
 function mergeSelected() {
