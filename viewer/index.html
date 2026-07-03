@@ -58,6 +58,7 @@ h1.title{font-family:'Chonburi',serif;font-weight:400;font-size:clamp(21px,5vw,3
 .chip{background:var(--surface);border:1px solid var(--surface2);border-radius:999px;
   padding:7px 14px;font-size:13px;color:var(--ivory)}
 .chip.gold{background:var(--gold);color:#1d1608;font-weight:600;border-color:var(--gold)}
+.chip.danger{border-color:var(--danger);color:var(--danger)}
 .chip:disabled{opacity:.35;cursor:default}
 .spacer{flex:1}
 
@@ -221,6 +222,7 @@ function applyDraft() {
 function applyOp(op, persist = true) {
   if (op.t === "merge") doMerge(op.into, op.from);
   else if (op.t === "move") doMove(op.photo, op.fi, op.to, op.nid);
+  else if (op.t === "del") doDelete(op.id);
   else if (op.t === "name") {
     const p = DATA.people.find(x => x.id === op.id);
     if (p) p.name = op.nm;
@@ -255,6 +257,13 @@ function doMerge(intoId, fromId) {
   DATA.photos.forEach(ph => ph.faces.forEach(f => { if (f.personId === fromId) f.personId = intoId; }));
   DATA.people = DATA.people.filter(p => p.id !== fromId);
   recount(intoId);
+}
+
+/* ---------- ลบกลุ่มที่ไม่ใช่คน (พระพุทธรูป/ลายเสื้อ/วัตถุ) ---------- */
+function doDelete(pid) {
+  DATA.photos.forEach(ph => { ph.faces = ph.faces.filter(f => f.personId !== pid); });
+  DATA.people = DATA.people.filter(p => p.id !== pid);
+  if (activePerson === pid) activePerson = null;
 }
 
 /* ---------- ย้ายหน้าหนึ่งหน้าไปอีกคน (หรือแยกเป็นคนใหม่ to="+") ---------- */
@@ -297,7 +306,7 @@ function render() {
 
   if (ADMIN) {
     c.append(el("div", "admin-note",
-      `โหมดช่างภาพ — แก้ได้ 2 ระดับ: <b>รวมกลุ่ม</b> (เลือกหลายคนที่เป็นคนเดียวกันจากวงกลมมุมซ้าย แล้วกดรวมกลุ่ม) และ <b>ย้ายรายหน้า</b> (เปิดรูป แตะหน้าที่ผิดคน แล้วเลือกคนที่ถูกหรือแยกเป็นคนใหม่) · แตะชื่อค้างเพื่อเปลี่ยนชื่อ · เสร็จแล้วกด "ส่งออก data.json" นำไปวางทับของเดิม`));
+      `โหมดช่างภาพ — แก้ได้ 2 ระดับ: <b>รวมกลุ่ม</b> (เลือกหลายคนที่เป็นคนเดียวกันจากวงกลมมุมซ้าย แล้วกดรวมกลุ่ม) , <b>ย้ายรายหน้า</b> (เปิดรูป แตะหน้าที่ผิดคน แล้วเลือกคนที่ถูกหรือแยกเป็นคนใหม่) และ <b>ลบ ไม่ใช่คน</b> (เลือกกลุ่มที่เป็นพระพุทธรูป/ลายเสื้อ แล้วกดลบ) · แตะชื่อค้างเพื่อเปลี่ยนชื่อ · เสร็จแล้วกด "ส่งออก data.json" นำไปวางทับของเดิม`));
   }
 
   const rl = el("div", "rail-label");
@@ -321,9 +330,12 @@ function render() {
     const mg = el("button", "chip gold", `รวมกลุ่ม (${selected.size})`);
     mg.disabled = selected.size < 2;
     mg.onclick = mergeSelected;
+    const del = el("button", "chip danger", `ลบ ไม่ใช่คน (${selected.size})`);
+    del.disabled = selected.size < 1;
+    del.onclick = deleteSelected;
     const ex = el("button", "chip", "ส่งออก data.json");
     ex.onclick = exportJSON;
-    bar.append(mg, ex);
+    bar.append(mg, del, ex);
   }
   c.append(bar);
 
@@ -379,6 +391,15 @@ function mergeSelected() {
   selected.clear();
   if (activePerson && ids.includes(activePerson)) activePerson = target;
   toast("รวมกลุ่มแล้ว");
+  render();
+}
+
+function deleteSelected() {
+  const names = DATA.people.filter(p => selected.has(p.id)).map(p => p.name).join(", ");
+  if (!confirm(`ลบ ${selected.size} กลุ่มนี้ออกถาวร (${names})?\nใช้กับกลุ่มที่ไม่ใช่คน เช่น พระพุทธรูป/ลายเสื้อ`)) return;
+  [...selected].forEach(id => applyOp({ t: "del", id }));
+  selected.clear();
+  toast("ลบแล้ว");
   render();
 }
 
