@@ -40,6 +40,25 @@ import numpy as np
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
 
 
+def imread_u(path) -> "np.ndarray | None":
+    """cv2.imread ที่รองรับ path ยูนิโค้ด — บน Windows imread เปิดโฟลเดอร์ชื่อไทยไม่ได้"""
+    try:
+        buf = np.fromfile(str(path), dtype=np.uint8)
+    except OSError:
+        return None
+    if buf.size == 0:
+        return None
+    return cv2.imdecode(buf, cv2.IMREAD_COLOR)
+
+
+def imwrite_u(path, img, params=None) -> bool:
+    """cv2.imwrite ที่รองรับ path ยูนิโค้ด"""
+    ok, buf = cv2.imencode(Path(path).suffix or ".jpg", img, params or [])
+    if ok:
+        buf.tofile(str(path))
+    return ok
+
+
 # ---------------------------------------------------------------- utils
 
 def slugify(name: str) -> str:
@@ -100,23 +119,20 @@ def drive_download(file_id: str, api_key: str, dest: Path):
 
     import requests
 
+    # ลอง alt=media ครั้งเดียว (เร็วถ้าไม่โดน rate limit)
     url = f"{DRIVE_LIST_URL}/{file_id}"
-    for attempt in range(4):
-        r = requests.get(url, params={"alt": "media", "key": api_key}, timeout=120)
-        if r.status_code in (403, 429, 500, 502, 503):
-            time.sleep(2 * (attempt + 1))
-            continue
-        r.raise_for_status()
+    r = requests.get(url, params={"alt": "media", "key": api_key}, timeout=120)
+    if r.status_code == 200:
         dest.write_bytes(r.content)
         return
-    # alt=media โดน rate limit ถาวรกับบางไฟล์ -> ใช้ thumbnail endpoint (w1600 พอสำหรับ detect)
+    # โดน 403/429 ถาวรกับหลายไฟล์ -> fallback ทันทีไปที่ thumbnail endpoint (w1600 พอสำหรับ detect)
     thumb = f"https://drive.google.com/thumbnail?id={file_id}&sz=w1600"
     for attempt in range(4):
         r = requests.get(thumb, timeout=120, allow_redirects=True)
         if r.status_code == 200 and r.content[:3] == b"\xff\xd8\xff":
             dest.write_bytes(r.content)
             return
-        time.sleep(2 * (attempt + 1))
+        time.sleep(1.5 * (attempt + 1))
     raise RuntimeError(f"โหลดไม่สำเร็จ (ทั้ง alt=media และ thumbnail): {file_id}")
 
 
@@ -279,7 +295,7 @@ def main():
 
     crops = []
     for i, p in iterator:
-        img = cv2.imread(str(p["fb_local"]))
+        img = imread_u(p["fb_local"])
         if img is None:
             log(f"  ! อ่านไฟล์ไม่ได้ ข้าม: {p['name']}")
             continue
@@ -321,8 +337,8 @@ def main():
             person["best"] = (score, j)
         photo_faces.setdefault(pi, []).append({"personId": None, "faceId": face_id,
                                                "bbox": [int(v) for v in bbox], "lab": lab})
-        cv2.imwrite(str(faces_dir / f"{face_id}.jpg"), crops[j],
-                    [cv2.IMWRITE_JPEG_QUALITY, 88])
+        imwrite_u(faces_dir / f"{face_id}.jpg", crops[j],
+                  [cv2.IMWRITE_JPEG_QUALITY, 88])
 
     # เรียงคนตามจำนวนรูปมาก->น้อย แล้วตั้ง id
     order = sorted(people.items(), key=lambda kv: -len(kv[1]["photoIdx"]))
