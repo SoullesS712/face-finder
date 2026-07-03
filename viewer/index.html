@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>หารูปฉัน · Face Finder</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600;700&family=Chonburi&display=swap" rel="stylesheet">
@@ -48,15 +48,16 @@ h1.title{font-family:'Chonburi',serif;font-weight:400;font-size:clamp(21px,5vw,3
 .person .ct{font-size:11px;color:var(--muted)}
 .person .badge{position:absolute;top:-2px;right:2px;background:var(--gold);color:#1d1608;font-size:11px;
   font-weight:700;min-width:20px;height:20px;border-radius:10px;display:flex;align-items:center;justify-content:center;padding:0 5px}
-.person .check{position:absolute;top:-2px;left:2px;width:20px;height:20px;border-radius:50%;
-  border:2px solid var(--muted);background:var(--ink);display:none;align-items:center;justify-content:center;font-size:12px}
+.person .check{position:absolute;top:-2px;left:2px;width:24px;height:24px;border-radius:50%;
+  border:2px solid var(--muted);background:var(--ink);display:none;align-items:center;justify-content:center;font-size:13px}
+.person .check::after{content:"";position:absolute;inset:-10px} /* ขยายพื้นที่กดให้ถึง ~44px */
 .admin .person .check{display:flex}
 .person.selected .check{background:var(--gold);border-color:var(--gold);color:#1d1608}
 
 /* ---------- toolbar ---------- */
 .bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:4px 0 14px}
 .chip{background:var(--surface);border:1px solid var(--surface2);border-radius:999px;
-  padding:7px 14px;font-size:13px;color:var(--ivory)}
+  padding:10px 16px;font-size:13px;color:var(--ivory)}
 .chip.gold{background:var(--gold);color:#1d1608;font-weight:600;border-color:var(--gold)}
 .chip.danger{border-color:var(--danger);color:var(--danger)}
 .chip:disabled{opacity:.35;cursor:default}
@@ -82,7 +83,7 @@ h1.title{font-family:'Chonburi',serif;font-weight:400;font-size:clamp(21px,5vw,3
 .lb-faces{display:flex;gap:10px;overflow-x:auto;padding:10px 14px 4px}
 .lb-faces .person{width:56px}
 .lb-faces .ava{width:48px;height:48px}
-.lb-actions{display:flex;gap:10px;padding:12px 14px 18px;flex-wrap:wrap}
+.lb-actions{display:flex;gap:10px;padding:12px 14px calc(18px + env(safe-area-inset-bottom));flex-wrap:wrap}
 .btn{flex:1;min-width:140px;text-align:center;padding:13px 16px;border-radius:12px;font-size:15px;font-weight:600}
 .btn.gold{background:var(--gold);color:#1d1608}
 .btn.line{border:1px solid var(--surface2);color:var(--ivory)}
@@ -101,7 +102,7 @@ h1.title{font-family:'Chonburi',serif;font-weight:400;font-size:clamp(21px,5vw,3
 .pcard h3{font-size:18px;color:var(--ivory)}
 .pcard p{font-size:13px;color:var(--muted);margin-top:4px}
 
-.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--gold);
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--gold);
   color:#1d1608;font-weight:600;font-size:14px;padding:10px 20px;border-radius:999px;z-index:99;
   opacity:0;pointer-events:none;transition:opacity .25s}
 .toast.show{opacity:1}
@@ -348,9 +349,17 @@ function render() {
     const d = el("div", "ph");
     const im = el("img");
     im.loading = "lazy";
+    im.alt = ph.name;
     im.src = thumbURL(ph, 400);
     im.onload = () => im.classList.add("ld");
-    im.onerror = () => { d.style.display = "none"; };
+    im.onerror = () => {
+      // Drive rate limit ชั่วคราวทำรูปหายถาวร -> ลองใหม่ 2 ครั้งก่อนซ่อน
+      const n = (+im.dataset.retry || 0) + 1;
+      if (ph.fbId && n <= 2) {
+        im.dataset.retry = n;
+        setTimeout(() => { im.src = thumbURL(ph, 400) + "&r=" + n; }, 1500 * n);
+      } else d.style.display = "none";
+    };
     d.append(im);
     if (ph.faces.length) d.append(el("span", "fc", `${ph.faces.length} คน`));
     d.onclick = () => openLB(photos.map(x => x.id), ph.id);
@@ -365,6 +374,7 @@ function personChip(p, ctx) {
   const im = el("img");
   im.src = resolve("faces/" + p.cover);
   im.loading = "lazy";
+  im.alt = p.name;
   a.append(im);
   d.append(a, el("div", "nm", p.name), el("div", "ct", `${p.photoCount} รูป`));
   if (ADMIN && ctx === "rail") {
@@ -373,7 +383,8 @@ function personChip(p, ctx) {
     d.append(ck);
     let t;
     d.onpointerdown = () => { t = setTimeout(() => renamePerson(p.id), 600); };
-    d.onpointerup = d.onpointerleave = () => clearTimeout(t);
+    // ต้องมี pointercancel ด้วย: ตอน scroll แถบบนมือถือ browser ยิง cancel ไม่ใช่ up/leave
+    d.onpointerup = d.onpointerleave = d.onpointercancel = () => clearTimeout(t);
   }
   d.onclick = () => { activePerson = (activePerson === p.id ? null : p.id); closeLB(); render(); };
   return d;
@@ -504,6 +515,20 @@ document.addEventListener("keydown", e => {
   if (e.key === "ArrowLeft") stepLB(-1);
   if (e.key === "ArrowRight") stepLB(1);
 });
+
+/* ---------- swipe ซ้าย/ขวาใน lightbox (มือถือ) ---------- */
+(() => {
+  const zone = document.querySelector(".lb-img");
+  let x0 = 0, y0 = 0;
+  zone.addEventListener("touchstart", e => {
+    x0 = e.touches[0].clientX; y0 = e.touches[0].clientY;
+  }, { passive: true });
+  zone.addEventListener("touchend", e => {
+    const dx = e.changedTouches[0].clientX - x0;
+    const dy = e.changedTouches[0].clientY - y0;
+    if (Math.abs(dx) > 48 && Math.abs(dx) > 1.5 * Math.abs(dy)) stepLB(dx < 0 ? 1 : -1);
+  }, { passive: true });
+})();
 
 boot();
 </script>
