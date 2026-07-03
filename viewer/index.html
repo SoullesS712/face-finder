@@ -296,6 +296,17 @@ const nextNewId = () => {
 
 /* ---------- render หลัก ---------- */
 function render() {
+  // จำตำแหน่ง scroll ไว้ก่อน rebuild — ไม่ให้เด้งกลับต้นหน้าตอนกดลบ/รวม/ย้าย
+  const prevRail = document.querySelector(".rail");
+  const railX = prevRail ? prevRail.scrollLeft : 0;
+  const winY = window.scrollY;
+  renderInner();
+  const newRail = document.querySelector(".rail");
+  if (newRail) newRail.scrollLeft = railX;
+  window.scrollTo(0, winY);
+}
+
+function renderInner() {
   $("#pj-title").textContent = DATA.project;
   $("#pj-sub").innerHTML = activePerson
     ? `กำลังกรองรูปเฉพาะคน · แตะ "ดูทั้งหมด" เพื่อกลับ`
@@ -329,9 +340,11 @@ function render() {
   if (ADMIN) {
     bar.append(el("span", "spacer"));
     const mg = el("button", "chip gold", `รวมกลุ่ม (${selected.size})`);
+    mg.id = "btn-merge";
     mg.disabled = selected.size < 2;
     mg.onclick = mergeSelected;
     const del = el("button", "chip danger", `ลบ ไม่ใช่คน (${selected.size})`);
+    del.id = "btn-del";
     del.disabled = selected.size < 1;
     del.onclick = deleteSelected;
     const ex = el("button", "chip", "ส่งออก data.json");
@@ -370,6 +383,7 @@ function render() {
 
 function personChip(p, ctx) {
   const d = el("div", "person" + (p.id === activePerson ? " active" : "") + (selected.has(p.id) ? " selected" : ""));
+  d.dataset.pid = p.id;
   const a = el("div", "ava");
   const im = el("img");
   im.src = resolve("faces/" + p.cover);
@@ -392,7 +406,20 @@ function personChip(p, ctx) {
 
 function toggleSelect(id) {
   selected.has(id) ? selected.delete(id) : selected.add(id);
-  render();
+  // อัปเดตเฉพาะ chip ที่ติ๊ก ไม่ re-render ทั้งหน้า -> scroll ไม่เด้ง
+  const on = selected.has(id);
+  document.querySelectorAll(`.person[data-pid="${id}"]`).forEach(d => {
+    d.classList.toggle("selected", on);
+    const ck = d.querySelector(".check");
+    if (ck) ck.textContent = on ? "✓" : "";
+  });
+  updateAdminBar();
+}
+
+function updateAdminBar() {
+  const mg = $("#btn-merge"), del = $("#btn-del");
+  if (mg) { mg.textContent = `รวมกลุ่ม (${selected.size})`; mg.disabled = selected.size < 2; }
+  if (del) { del.textContent = `ลบ ไม่ใช่คน (${selected.size})`; del.disabled = selected.size < 1; }
 }
 
 function mergeSelected() {
