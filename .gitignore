@@ -1,0 +1,15 @@
+# รูปดิบที่ดาวน์โหลดมา process (ใหญ่ ~GB ไม่ต้องขึ้น repo)
+.cache/
+spike_test/sample/
+
+# log ตอนรัน pipeline
+*.log
+
+# รายงาน spike (สร้างใหม่ได้)
+spike_test/spike1_report.html
+spike_test/spike2_embed_test.html
+spike_test/faces_debug/
+
+# Python
+__pycache__/
+*.pyc

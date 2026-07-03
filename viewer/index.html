@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>หารูปฉัน · Face Finder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600;700&family=Chonburi&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#16130E;        /* พื้นหลัก น้ำตาลดำอุ่น */
+  --surface:#221E16;    /* การ์ด/แถบ */
+  --surface2:#2C2720;
+  --gold:#D9A441;       /* ทอง จีวร */
+  --gold-dim:#8a6a2e;
+  --ivory:#F4EFE6;      /* ตัวอักษรหลัก */
+  --muted:#9C948A;
+  --danger:#C96A5B;
+  --ring:2px solid var(--gold);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--ink);color:var(--ivory);font-family:'Anuphan',system-ui,sans-serif;min-height:100vh}
+img{display:block}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+a{color:var(--gold);text-decoration:none}
+.wrap{max-width:1100px;margin:0 auto;padding:0 14px}
+
+/* ---------- header ---------- */
+header{padding:14px 0 6px}
+.eyebrow{font-size:11px;letter-spacing:.18em;color:var(--gold);text-transform:uppercase}
+h1.title{font-family:'Chonburi',serif;font-weight:400;font-size:clamp(21px,5vw,32px);line-height:1.25;margin-top:2px}
+.sub{color:var(--muted);font-size:13px;margin-top:3px}
+.sub b{color:var(--ivory);font-weight:600}
+
+/* ---------- people rail ---------- */
+.rail-label{display:flex;align-items:baseline;gap:10px;margin:12px 0 8px}
+.rail-label h2{font-size:14px;font-weight:600}
+.rail-label span{font-size:12px;color:var(--muted)}
+.rail{display:flex;gap:12px;overflow-x:auto;padding:4px 2px 10px;scrollbar-width:thin;scrollbar-color:var(--gold-dim) transparent}
+.person{flex:0 0 auto;width:64px;text-align:center;position:relative;transition:transform .15s}
+.person:active{transform:scale(.94)}
+.person .ava{width:56px;height:56px;border-radius:50%;overflow:hidden;margin:0 auto;
+  border:2px solid var(--surface2);background:var(--surface2)}
+.person.active .ava{border:var(--ring);box-shadow:0 0 0 3px rgba(217,164,65,.25)}
+.person .ava img{width:100%;height:100%;object-fit:cover}
+.person .nm{font-size:12px;margin-top:6px;color:var(--ivory);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.person .ct{font-size:11px;color:var(--muted)}
+.person .badge{position:absolute;top:-2px;right:2px;background:var(--gold);color:#1d1608;font-size:11px;
+  font-weight:700;min-width:20px;height:20px;border-radius:10px;display:flex;align-items:center;justify-content:center;padding:0 5px}
+.person .check{position:absolute;top:-2px;left:2px;width:20px;height:20px;border-radius:50%;
+  border:2px solid var(--muted);background:var(--ink);display:none;align-items:center;justify-content:center;font-size:12px}
+.admin .person .check{display:flex}
+.person.selected .check{background:var(--gold);border-color:var(--gold);color:#1d1608}
+
+/* ---------- toolbar ---------- */
+.bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:4px 0 14px}
+.chip{background:var(--surface);border:1px solid var(--surface2);border-radius:999px;
+  padding:7px 14px;font-size:13px;color:var(--ivory)}
+.chip.gold{background:var(--gold);color:#1d1608;font-weight:600;border-color:var(--gold)}
+.chip:disabled{opacity:.35;cursor:default}
+.spacer{flex:1}
+
+/* ---------- grid ---------- */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;padding-bottom:80px}
+@media(min-width:700px){.grid{grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}}
+.ph{position:relative;border-radius:10px;overflow:hidden;background:var(--surface);aspect-ratio:4/3}
+.ph img{width:100%;height:100%;object-fit:cover;transition:opacity .3s;opacity:0}
+.ph img.ld{opacity:1}
+.ph .fc{position:absolute;left:6px;bottom:6px;background:rgba(22,19,14,.75);backdrop-filter:blur(4px);
+  border-radius:999px;font-size:11px;padding:3px 9px;color:var(--ivory)}
+.empty{color:var(--muted);text-align:center;padding:60px 0;font-size:14px}
+
+/* ---------- lightbox ---------- */
+.lb{position:fixed;inset:0;background:rgba(10,8,5,.94);z-index:50;display:none;flex-direction:column}
+.lb.open{display:flex}
+.lb-top{display:flex;align-items:center;gap:8px;padding:12px 14px}
+.lb-top .fname{font-size:13px;color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lb-img{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;padding:0 8px}
+.lb-img img{max-width:100%;max-height:100%;object-fit:contain;border-radius:6px}
+.lb-faces{display:flex;gap:10px;overflow-x:auto;padding:10px 14px 4px}
+.lb-faces .person{width:56px}
+.lb-faces .ava{width:48px;height:48px}
+.lb-actions{display:flex;gap:10px;padding:12px 14px 18px;flex-wrap:wrap}
+.btn{flex:1;min-width:140px;text-align:center;padding:13px 16px;border-radius:12px;font-size:15px;font-weight:600}
+.btn.gold{background:var(--gold);color:#1d1608}
+.btn.line{border:1px solid var(--surface2);color:var(--ivory)}
+.nav{position:absolute;top:50%;transform:translateY(-50%);width:44px;height:64px;display:flex;
+  align-items:center;justify-content:center;font-size:26px;color:var(--ivory);opacity:.7}
+.nav.prev{left:2px}.nav.next{right:2px}
+
+/* ---------- admin ---------- */
+.admin-note{background:var(--surface);border:1px dashed var(--gold-dim);border-radius:12px;
+  padding:10px 14px;font-size:13px;color:var(--muted);margin-bottom:12px}
+.admin-note b{color:var(--gold)}
+
+/* ---------- project list (landing) ---------- */
+.plist{display:grid;gap:12px;margin-top:20px}
+.pcard{background:var(--surface);border:1px solid var(--surface2);border-radius:14px;padding:18px;display:block}
+.pcard h3{font-size:18px;color:var(--ivory)}
+.pcard p{font-size:13px;color:var(--muted);margin-top:4px}
+
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--gold);
+  color:#1d1608;font-weight:600;font-size:14px;padding:10px 20px;border-radius:999px;z-index:99;
+  opacity:0;pointer-events:none;transition:opacity .25s}
+.toast.show{opacity:1}
+
+/* ---------- admin: ย้ายหน้า ---------- */
+.admin .lb-faces .person .edit{position:absolute;top:-4px;right:-2px;background:var(--gold);
+  color:#1d1608;font-size:10px;font-weight:700;border-radius:999px;padding:2px 6px}
+.picker{position:fixed;inset:0;background:rgba(10,8,5,.7);z-index:80;display:flex;
+  align-items:flex-end;justify-content:center}
+.picker-panel{background:var(--surface);border-radius:18px 18px 0 0;width:100%;max-width:560px;
+  max-height:70vh;display:flex;flex-direction:column}
+.picker-panel h3{padding:16px 18px 6px;font-size:15px}
+.picker-panel p{padding:0 18px 10px;font-size:12px;color:var(--muted)}
+.picker-list{overflow-y:auto;padding:0 10px 16px}
+.pick-item{display:flex;align-items:center;gap:12px;width:100%;padding:9px 10px;border-radius:12px;text-align:left}
+.pick-item:active{background:var(--surface2)}
+.pick-item img{width:40px;height:40px;border-radius:50%;object-fit:cover;background:var(--surface2)}
+.pick-item .pi-nm{font-size:14px;color:var(--ivory)}
+.pick-item .pi-ct{font-size:12px;color:var(--muted)}
+.pick-item.new{color:var(--gold);font-weight:600;font-size:14px}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap" id="app">
+  <header>
+    <div class="eyebrow">Face Finder</div>
+    <h1 class="title" id="pj-title">กำลังโหลด…</h1>
+    <div class="sub" id="pj-sub"></div>
+  </header>
+  <div id="content"></div>
+</div>
+
+<div class="lb" id="lb">
+  <div class="lb-top">
+    <div class="fname" id="lb-name"></div>
+    <button class="chip" onclick="closeLB()">ปิด ✕</button>
+  </div>
+  <div class="lb-img" style="position:relative">
+    <button class="nav prev" onclick="stepLB(-1)">‹</button>
+    <img id="lb-photo" alt="">
+    <button class="nav next" onclick="stepLB(1)">›</button>
+  </div>
+  <div class="lb-faces" id="lb-faces"></div>
+  <div class="lb-actions" id="lb-actions"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+const qs = new URLSearchParams(location.search);
+const SLUG = qs.get("p");
+const ADMIN = qs.get("admin") === "1";
+let DATA = null;
+let activePerson = null;   // personId ที่เลือกดู
+let selected = new Set();  // admin: คนที่เลือกเพื่อ merge
+let lbList = [];           // รายการ photo ids ใน lightbox ปัจจุบัน
+let lbIdx = 0;
+
+const $ = s => document.querySelector(s);
+const el = (t, cls, html) => { const e = document.createElement(t); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
+const toast = m => { const t = $("#toast"); t.textContent = m; t.classList.add("show"); setTimeout(() => t.classList.remove("show"), 1800); };
+
+/* ---------- URL รูป: รองรับ Drive / ไฟล์ local / โหมด standalone ---------- */
+const INLINE = window.__INLINE__ || null;   // {data, files:{relPath:dataURI}}
+const base = () => `projects/${SLUG}/`;
+const resolve = p => INLINE ? (INLINE.files[p] || "") : base() + p;
+const thumbURL = (ph, w) => ph.fbId
+  ? `https://drive.google.com/thumbnail?id=${ph.fbId}&sz=w${w}`
+  : resolve(ph.src);
+const fullURL  = ph => ph.fbId
+  ? `https://drive.google.com/thumbnail?id=${ph.fbId}&sz=w1600`
+  : resolve(ph.src);
+const printDL  = ph => ph.printId
+  ? `https://drive.google.com/uc?export=download&id=${ph.printId}`
+  : (ph.printSrc ? resolve(ph.printSrc) : null);
+const driveView = ph => ph.printId ? `https://drive.google.com/file/d/${ph.printId}/view` : null;
+
+/* ---------- โหลดข้อมูล ---------- */
+async function boot() {
+  if (INLINE) { DATA = INLINE.data; applyDraft(); render(); return; }
+  if (!SLUG) return landing();
+  try {
+    const r = await fetch(base() + "data.json");
+    DATA = await r.json();
+  } catch (e) {
+    $("#pj-title").textContent = "ไม่พบข้อมูลโปรเจกต์";
+    $("#pj-sub").textContent = "เช็คลิงก์อีกครั้ง หรือติดต่อช่างภาพ";
+    return;
+  }
+  applyDraft();
+  render();
+}
+
+async function landing() {
+  $("#pj-title").textContent = "เลือกงานถ่ายภาพ";
+  $("#pj-sub").textContent = "เลือกงานที่คุณไปร่วม เพื่อค้นหารูปของคุณ";
+  let idx = { projects: [] };
+  try { idx = await (await fetch("projects/index.json")).json(); } catch (e) {}
+  const list = el("div", "plist");
+  if (!idx.projects.length) list.append(el("div", "empty", "ยังไม่มีโปรเจกต์ — ช่างภาพรัน process.py ก่อน"));
+  idx.projects.forEach(p => {
+    const a = el("a", "pcard");
+    a.href = `?p=${encodeURIComponent(p.slug)}`;
+    a.append(el("h3", null, p.name), el("p", null, `${p.photoCount} รูป · ${p.peopleCount} คน`));
+    list.append(a);
+  });
+  $("#content").append(list);
+}
+
+/* ---------- admin draft: เก็บทุกการแก้เป็นลำดับ ops ใน localStorage จนกด export ---------- */
+const draftKey = () => `ff-ops-${SLUG || "inline"}`;
+const loadOps = () => JSON.parse(localStorage.getItem(draftKey()) || "[]");
+function applyDraft() {
+  if (!ADMIN) return;
+  loadOps().forEach(op => applyOp(op, false));
+}
+function applyOp(op, persist = true) {
+  if (op.t === "merge") doMerge(op.into, op.from);
+  else if (op.t === "move") doMove(op.photo, op.fi, op.to, op.nid);
+  else if (op.t === "name") {
+    const p = DATA.people.find(x => x.id === op.id);
+    if (p) p.name = op.nm;
+  }
+  if (persist) {
+    const ops = loadOps(); ops.push(op);
+    localStorage.setItem(draftKey(), JSON.stringify(ops));
+  }
+}
+
+/* ---------- นับใหม่ / ลบคนว่าง ---------- */
+function recount(pid) {
+  const p = DATA.people.find(x => x.id === pid);
+  if (!p) return;
+  let fc = 0; const set = new Set();
+  DATA.photos.forEach(ph => ph.faces.forEach(f => {
+    if (f.personId === pid) { fc++; set.add(ph.id); }
+  }));
+  p.faceCount = fc; p.photoCount = set.size;
+  if (fc === 0) {
+    DATA.people = DATA.people.filter(x => x.id !== pid);
+    if (activePerson === pid) activePerson = null;
+  }
+}
+
+/* ---------- รวมกลุ่ม ---------- */
+function doMerge(intoId, fromId) {
+  if (intoId === fromId) return;
+  const into = DATA.people.find(p => p.id === intoId);
+  const from = DATA.people.find(p => p.id === fromId);
+  if (!into || !from) return;
+  DATA.photos.forEach(ph => ph.faces.forEach(f => { if (f.personId === fromId) f.personId = intoId; }));
+  DATA.people = DATA.people.filter(p => p.id !== fromId);
+  recount(intoId);
+}
+
+/* ---------- ย้ายหน้าหนึ่งหน้าไปอีกคน (หรือแยกเป็นคนใหม่ to="+") ---------- */
+function doMove(photoId, fi, to, nid) {
+  const ph = DATA.photos.find(x => x.id === photoId);
+  if (!ph || !ph.faces[fi]) return;
+  const face = ph.faces[fi];
+  const oldId = face.personId;
+  let target = to;
+  if (to === "+") {
+    target = nid;
+    if (!DATA.people.find(p => p.id === nid)) {
+      const src = DATA.people.find(p => p.id === oldId);
+      DATA.people.push({
+        id: nid, name: "คนใหม่",
+        cover: face.faceId ? face.faceId + ".jpg" : (src ? src.cover : ""),
+        photoCount: 0, faceCount: 0,
+      });
+    }
+  }
+  if (oldId === target) return;
+  face.personId = target;
+  recount(oldId); recount(target);
+}
+const nextNewId = () => {
+  const n = Math.max(0, ...DATA.people.map(p => parseInt(p.id.replace(/\D/g, "")) || 0)) + 1;
+  return `p${String(n).padStart(3, "0")}`;
+};
+
+/* ---------- render หลัก ---------- */
+function render() {
+  $("#pj-title").textContent = DATA.project;
+  $("#pj-sub").innerHTML = activePerson
+    ? `กำลังกรองรูปเฉพาะคน · แตะ "ดูทั้งหมด" เพื่อกลับ`
+    : `แสดงรูปทั้งหมด ${DATA.photos.length} รูป · แตะ<b>หน้าของคุณ</b>ด้านล่างเพื่อดูเฉพาะรูปที่มีคุณ`;
+  document.body.classList.toggle("admin", ADMIN);
+
+  const c = $("#content");
+  c.innerHTML = "";
+
+  if (ADMIN) {
+    c.append(el("div", "admin-note",
+      `โหมดช่างภาพ — แก้ได้ 2 ระดับ: <b>รวมกลุ่ม</b> (เลือกหลายคนที่เป็นคนเดียวกันจากวงกลมมุมซ้าย แล้วกดรวมกลุ่ม) และ <b>ย้ายรายหน้า</b> (เปิดรูป แตะหน้าที่ผิดคน แล้วเลือกคนที่ถูกหรือแยกเป็นคนใหม่) · แตะชื่อค้างเพื่อเปลี่ยนชื่อ · เสร็จแล้วกด "ส่งออก data.json" นำไปวางทับของเดิม`));
+  }
+
+  const rl = el("div", "rail-label");
+  rl.append(el("h2", null, "คนในงานนี้"), el("span", null, `${DATA.people.length} คน · เรียงตามจำนวนรูป`));
+  c.append(rl);
+
+  const rail = el("div", "rail");
+  DATA.people.forEach(p => rail.append(personChip(p, "rail")));
+  c.append(rail);
+
+  const bar = el("div", "bar");
+  if (activePerson) {
+    const p = DATA.people.find(x => x.id === activePerson);
+    bar.append(el("span", "chip gold", `กำลังดูรูปของ: ${p ? p.name : ""}`));
+    const clr = el("button", "chip", "ดูทั้งหมด");
+    clr.onclick = () => { activePerson = null; render(); };
+    bar.append(clr);
+  }
+  if (ADMIN) {
+    bar.append(el("span", "spacer"));
+    const mg = el("button", "chip gold", `รวมกลุ่ม (${selected.size})`);
+    mg.disabled = selected.size < 2;
+    mg.onclick = mergeSelected;
+    const ex = el("button", "chip", "ส่งออก data.json");
+    ex.onclick = exportJSON;
+    bar.append(mg, ex);
+  }
+  c.append(bar);
+
+  const grid = el("div", "grid");
+  const photos = activePerson
+    ? DATA.photos.filter(ph => ph.faces.some(f => f.personId === activePerson))
+    : DATA.photos;
+  if (!photos.length) grid.append(el("div", "empty", "ไม่พบรูป"));
+  photos.forEach(ph => {
+    const d = el("div", "ph");
+    const im = el("img");
+    im.loading = "lazy";
+    im.src = thumbURL(ph, 400);
+    im.onload = () => im.classList.add("ld");
+    im.onerror = () => { d.style.display = "none"; };
+    d.append(im);
+    if (ph.faces.length) d.append(el("span", "fc", `${ph.faces.length} คน`));
+    d.onclick = () => openLB(photos.map(x => x.id), ph.id);
+    grid.append(d);
+  });
+  c.append(grid);
+}
+
+function personChip(p, ctx) {
+  const d = el("div", "person" + (p.id === activePerson ? " active" : "") + (selected.has(p.id) ? " selected" : ""));
+  const a = el("div", "ava");
+  const im = el("img");
+  im.src = resolve("faces/" + p.cover);
+  im.loading = "lazy";
+  a.append(im);
+  d.append(a, el("div", "nm", p.name), el("div", "ct", `${p.photoCount} รูป`));
+  if (ADMIN && ctx === "rail") {
+    const ck = el("div", "check", selected.has(p.id) ? "✓" : "");
+    ck.onclick = e => { e.stopPropagation(); toggleSelect(p.id); };
+    d.append(ck);
+    let t;
+    d.onpointerdown = () => { t = setTimeout(() => renamePerson(p.id), 600); };
+    d.onpointerup = d.onpointerleave = () => clearTimeout(t);
+  }
+  d.onclick = () => { activePerson = (activePerson === p.id ? null : p.id); closeLB(); render(); };
+  return d;
+}
+
+function toggleSelect(id) {
+  selected.has(id) ? selected.delete(id) : selected.add(id);
+  render();
+}
+
+function mergeSelected() {
+  const ids = [...selected];
+  const target = DATA.people.filter(p => ids.includes(p.id)).sort((a, b) => b.photoCount - a.photoCount)[0].id;
+  ids.filter(i => i !== target).forEach(i => applyOp({ t: "merge", into: target, from: i }));
+  selected.clear();
+  if (activePerson && ids.includes(activePerson)) activePerson = target;
+  toast("รวมกลุ่มแล้ว");
+  render();
+}
+
+function renamePerson(id) {
+  const p = DATA.people.find(x => x.id === id);
+  const nm = prompt("ตั้งชื่อคนนี้", p.name);
+  if (nm && nm.trim()) { applyOp({ t: "name", id, nm: nm.trim() }); render(); }
+}
+
+function exportJSON() {
+  const blob = new Blob([JSON.stringify(DATA)], { type: "application/json" });
+  const a = el("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "data.json";
+  a.click();
+  toast("ดาวน์โหลด data.json แล้ว นำไปวางทับใน projects/" + SLUG);
+}
+
+/* ---------- lightbox ---------- */
+function openLB(list, id) {
+  lbList = list;
+  lbIdx = list.indexOf(id);
+  drawLB();
+  $("#lb").classList.add("open");
+}
+function closeLB() { $("#lb").classList.remove("open"); }
+function stepLB(d) {
+  lbIdx = (lbIdx + d + lbList.length) % lbList.length;
+  drawLB();
+}
+function drawLB() {
+  const ph = DATA.photos.find(x => x.id === lbList[lbIdx]);
+  if (!ph) { closeLB(); return; }
+  $("#lb-name").textContent = `${ph.name} · ${lbIdx + 1}/${lbList.length}`;
+  $("#lb-photo").src = fullURL(ph);
+  const fc = $("#lb-faces");
+  fc.innerHTML = "";
+  ph.faces.forEach((f, fi) => {
+    const p = DATA.people.find(x => x.id === f.personId);
+    if (!p) return;
+    const chip = personChip(p, "lb");
+    if (ADMIN) {
+      chip.append(el("span", "edit", "ย้าย"));
+      chip.onclick = e => { e.stopPropagation(); openPicker(ph.id, fi, p); };
+    }
+    fc.append(chip);
+  });
+  const ac = $("#lb-actions");
+  ac.innerHTML = "";
+  const dl = printDL(ph);
+  if (dl) {
+    const a = el("a", "btn gold", "⬇ ดาวน์โหลดไฟล์ปริ้น (ความละเอียดเต็ม)");
+    a.href = dl;
+    ac.append(a);
+  } else {
+    ac.append(el("span", "btn line", "ไม่มีไฟล์ปริ้นสำหรับรูปนี้"));
+  }
+  const dv = driveView(ph);
+  if (dv) {
+    const a = el("a", "btn line", "เปิดใน Google Drive");
+    a.href = dv; a.target = "_blank";
+    ac.append(a);
+  }
+}
+
+/* ---------- picker: เลือกคนปลายทางเวลาย้ายหน้า ---------- */
+function openPicker(photoId, fi, fromPerson) {
+  const ov = el("div", "picker");
+  ov.onclick = e => { if (e.target === ov) ov.remove(); };
+  const panel = el("div", "picker-panel");
+  panel.append(
+    el("h3", null, `หน้านี้ตอนนี้อยู่กับ "${fromPerson.name}"`),
+    el("p", null, "เลือกคนที่ถูกต้อง หรือแยกเป็นคนใหม่"));
+  const list = el("div", "picker-list");
+
+  const nw = el("button", "pick-item new", "➕ แยกเป็นคนใหม่");
+  nw.onclick = () => {
+    applyOp({ t: "move", photo: photoId, fi, to: "+", nid: nextNewId() });
+    ov.remove(); toast("แยกเป็นคนใหม่แล้ว"); render(); drawLB();
+  };
+  list.append(nw);
+
+  DATA.people.filter(p => p.id !== fromPerson.id).forEach(p => {
+    const it = el("button", "pick-item");
+    const im = el("img"); im.src = resolve("faces/" + p.cover); im.loading = "lazy";
+    const tx = el("div");
+    tx.append(el("div", "pi-nm", p.name), el("div", "pi-ct", `${p.photoCount} รูป · ${p.faceCount} หน้า`));
+    it.append(im, tx);
+    it.onclick = () => {
+      applyOp({ t: "move", photo: photoId, fi, to: p.id });
+      ov.remove(); toast(`ย้ายไป "${p.name}" แล้ว`); render(); drawLB();
+    };
+    list.append(it);
+  });
+  panel.append(list);
+  ov.append(panel);
+  document.body.append(ov);
+}
+document.addEventListener("keydown", e => {
+  if (!$("#lb").classList.contains("open")) return;
+  if (e.key === "Escape") closeLB();
+  if (e.key === "ArrowLeft") stepLB(-1);
+  if (e.key === "ArrowRight") stepLB(1);
+});
+
+boot();
+</script>
+</body>
+</html>
